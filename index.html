@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glassbox IT Portal</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding: 2rem; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        h1 { margin-top: 0; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 1rem; }
+        
+        /* Login / Config Section */
+        .config-panel { display: flex; gap: 1rem; margin-bottom: 2rem; background: #f9fafb; padding: 1.5rem; border-radius: 8px; border: 1px solid #e5e7eb; }
+        .input-group { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+        input { padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; }
+        button { padding: 0.75rem 1.5rem; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-primary { background-color: #2563eb; color: white; margin-top: auto; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        
+        /* Dashboard Section */
+        #dashboard { display: none; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 1rem; border-bottom: 1px solid #e5e7eb; }
+        th { background-color: #f9fafb; font-weight: 600; color: #4b5563; }
+        td { font-size: 0.95rem; }
+        .reason-cell { max-width: 300px; word-wrap: break-word; }
+        .hash-cell { font-family: monospace; color: #6b7280; font-size: 0.85rem; }
+        
+        /* Action Buttons */
+        .actions { display: flex; gap: 0.5rem; }
+        .btn-approve { background-color: #059669; color: white; padding: 0.5rem 1rem; font-size: 0.85rem; }
+        .btn-approve:hover { background-color: #047857; }
+        .btn-deny { background-color: #dc2626; color: white; padding: 0.5rem 1rem; font-size: 0.85rem; }
+        .btn-deny:hover { background-color: #b91c1c; }
+        
+        /* Admin Controls Block Panel */
+        .admin-controls { background: #f9fafb; padding: 1.5rem; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 2rem; }
+        .admin-controls h3 { margin-top: 0; margin-bottom: 0.5rem; font-size: 1.1rem; color: #111827; }
+        .admin-controls textarea { width: 100%; margin-top: 0.5rem; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: monospace; resize: vertical; box-sizing: border-box;}
+        
+        /* Status Text */
+        #statusText { margin-top: 1rem; font-weight: bold; }
+        .text-error { color: #dc2626; }
+        .text-success { color: #059669; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🏛️ Glassbox Admin Portal</h1>
+    
+    <div class="config-panel" id="loginPanel">
+        <div class="input-group">
+            <label for="workerUrl">Cloudflare Worker URL</label>
+            <input type="url" id="workerUrl" placeholder="https://your-worker.workers.dev" required>
+        </div>
+        <div class="input-group">
+            <label for="adminSecret">Admin Secret Token</label>
+            <input type="password" id="adminSecret" placeholder="Enter your secure password" required>
+        </div>
+        <button class="btn-primary" id="connectBtn">Connect & Load</button>
+    </div>
+    
+    <div id="statusText"></div>
+
+    <div id="dashboard">
+        <div class="admin-controls">
+            <h3>🚫 Manually Block Domains</h3>
+            <p style="font-size: 0.85rem; color: #6b7280; margin-top: 0;">Enter domains to block, one per line (e.g., distracting-site.com).</p>
+            <textarea id="manualBlockInput" rows="4" placeholder="badsite.com&#10;anotherbadsite.net"></textarea>
+            <button class="btn-deny" id="blockBtn" style="margin-top: 0.5rem;">Block Domains</button>
+        </div>
+
+        <h2>Pending Unblock Requests</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Student Identity Hash</th>
+                    <th>Requested URL</th>
+                    <th>Academic Reason</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="requestsTableBody">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let currentWorkerUrl = "";
+    let currentSecret = "";
+
+    document.getElementById('connectBtn').addEventListener('click', loadRequests);
+    document.getElementById('blockBtn').addEventListener('click', blockDomains);
+
+    async function loadRequests() {
+        const urlInput = document.getElementById('workerUrl').value.trim();
+        const secretInput = document.getElementById('adminSecret').value.trim();
+        const statusText = document.getElementById('statusText');
+
+        if (!urlInput || !secretInput) {
+            statusText.textContent = "Please provide both URL and Secret.";
+            statusText.className = "text-error";
+            return;
+        }
+
+        // Clean up URL trailing slash if it exists
+        currentWorkerUrl = urlInput.endsWith('/') ? urlInput.slice(0, -1) : urlInput;
+        currentSecret = secretInput;
+
+        statusText.textContent = "Connecting...";
+        statusText.className = "";
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/requests`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${currentSecret}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.status === 401) {
+                throw new Error("Unauthorized: Incorrect Admin Secret");
+            } else if (!response.ok) {
+                throw new Error(`Server Error: ${response.status}`);
+            }
+
+            const requests = await response.json();
+            
+            // Switch UI
+            document.getElementById('statusText').textContent = "";
+            document.getElementById('dashboard').style.display = "block";
+            
+            renderTable(requests);
+
+        } catch (error) {
+            console.error(error);
+            statusText.textContent = `❌ Connection Failed: ${error.message}`;
+            statusText.className = "text-error";
+            document.getElementById('dashboard').style.display = "none";
+        }
+    }
+
+    function renderTable(requests) {
+        const tbody = document.getElementById('requestsTableBody');
+        tbody.innerHTML = ""; // Clear old rows
+
+        if (requests.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #6b7280;">No pending requests! 🎉</td></tr>`;
+            return;
+        }
+
+        requests.forEach(req => {
+            const date = new Date(req.created_at).toLocaleString();
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${date}</td>
+                <td class="hash-cell">${req.student_hash.substring(0, 16)}...</td>
+                <td><strong>${req.url}</strong></td>
+                <td class="reason-cell">${req.reason}</td>
+                <td class="actions">
+                    <button class="btn-approve" onclick="resolveRequest(${req.id}, 'approve', '${req.url}')">Approve</button>
+                    <button class="btn-deny" onclick="resolveRequest(${req.id}, 'deny', '${req.url}')">Deny</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function resolveRequest(requestId, action, fullUrl) {
+        if (!confirm(`Are you sure you want to ${action} this request?`)) return;
+
+        // Extract just the domain name for the DNR rule engine
+        let domain = fullUrl;
+        try {
+            // Add https:// if student forgot it so URL parser works
+            const parsedUrl = new URL(fullUrl.startsWith('http') ? fullUrl : `https://${fullUrl}`);
+            domain = parsedUrl.hostname;
+        } catch (e) {
+            console.warn("Could not parse URL, using raw input as domain.");
+        }
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/resolve`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentSecret}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    requestId: requestId,
+                    action: action,
+                    domain: domain
+                })
+            });
+
+            if (response.ok) {
+                alert(`Request ${action}d successfully!`);
+                loadRequests(); // Refresh the table
+            } else {
+                throw new Error("Failed to resolve request.");
+            }
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        }
+    }
+
+    async function blockDomains() {
+        const input = document.getElementById('manualBlockInput').value;
+        const domains = input.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+
+        if (domains.length === 0) {
+            alert("Please enter at least one domain to block.");
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to block ${domains.length} domain(s)?`)) return;
+
+        const blockBtn = document.getElementById('blockBtn');
+        blockBtn.disabled = true;
+        blockBtn.textContent = "Blocking...";
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/block`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentSecret}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ domains: domains })
+            });
+
+            if (response.ok) {
+                alert(`Successfully blocked ${domains.length} domain(s)!`);
+                document.getElementById('manualBlockInput').value = "";
+            } else {
+                throw new Error("Failed to block domains.");
+            }
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        } finally {
+            blockBtn.disabled = false;
+            blockBtn.textContent = "Block Domains";
+        }
+    }
+</script>
+
+</body>
+</html>
