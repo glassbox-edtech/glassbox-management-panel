@@ -217,12 +217,42 @@
         .block-table tr:hover td { background-color: transparent; }
         .block-table th { background-color: transparent; border-bottom: 1px solid var(--border-color); }
         
-        /* Charts */
+        /* Charts & Insight Filters */
         .chart-wrapper { 
             position: relative; 
             height: 400px; 
             width: 100%; 
             margin-top: 1.5rem; 
+        }
+
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 1rem;
+        }
+        
+        .filter-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .filter-item input, .filter-item select {
+            padding: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .add-app-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
         }
 
         /* Status Text & Logging */
@@ -319,13 +349,67 @@
         <div id="tab-insights" class="tab-content">
             <div class="admin-controls">
                 <h3>📈 Application Usage & ROI Tracking</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Total time spent across tracked applications across the entire district.</p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Visualize time spent across tracked applications based on dynamic filters.</p>
+                
+                <!-- Advanced Chart Filters -->
+                <div class="filter-bar">
+                    <div class="filter-item">
+                        <label>Timeframe</label>
+                        <select id="filterTimeframe">
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                            <option value="all">All Time</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Display Limit</label>
+                        <input type="number" id="filterLimit" value="50" min="5" max="200">
+                    </div>
+                    <div class="filter-item">
+                        <label>Student Hash (Optional)</label>
+                        <input type="text" id="filterHash" placeholder="Exact hash to isolate...">
+                    </div>
+                    <div class="filter-item">
+                        <label>Min Minutes</label>
+                        <input type="number" id="filterMinMins" value="0" min="0">
+                    </div>
+                    <div class="filter-item" style="flex: auto; justify-content: flex-end;">
+                        <button class="btn-primary" onclick="loadInsights()" style="width: 100%;">Apply Filters & Refresh</button>
+                    </div>
+                </div>
                 
                 <div id="noDataMessage"></div>
                 
                 <div class="chart-wrapper" id="chartContainer" style="display: none;">
                     <canvas id="roiChart"></canvas>
                 </div>
+            </div>
+
+            <div class="admin-controls">
+                <h3>✅ Manage Approved Apps</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Add academic domains here. Time spent on these apps is always logged for ROI calculation.</p>
+                
+                <div class="add-app-row">
+                    <input type="text" id="newAppDomain" placeholder="Domain (e.g., ixl.com)" style="flex: 2;">
+                    <input type="text" id="newAppName" placeholder="App Name (e.g., IXL Math)" style="flex: 2;">
+                    <input type="text" id="newAppCategory" placeholder="Category (e.g., Testing)" style="flex: 1;">
+                    <button class="btn-approve" onclick="addApprovedApp()">Add App</button>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Application Name</th>
+                            <th>Category</th>
+                            <th style="width: 100px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="approvedAppsTableBody">
+                        <!-- Rows injected via JS -->
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -409,7 +493,7 @@
         document.getElementById('errorLog').textContent = "";
     }
 
-    // Main loader that fires off both data requests
+    // Main loader that fires off all data requests
     async function loadDashboardData() {
         const urlInput = document.getElementById('workerUrl').value.trim();
         const secretInput = document.getElementById('adminSecret').value.trim();
@@ -431,9 +515,10 @@
             // Wait for requests to load to verify auth is successful
             await loadRequests();
             
-            // If auth is successful, show dashboard and fetch insights
+            // If auth is successful, show dashboard and fetch Insights data
             document.getElementById('dashboard').style.display = "block";
-            loadInsights(); // Non-blocking load for insights tab
+            loadInsights(); 
+            loadApprovedApps();
 
         } catch (error) {
             console.error(error);
@@ -441,6 +526,10 @@
             document.getElementById('dashboard').style.display = "none";
         }
     }
+
+    // ==========================================
+    // FILTER MANAGEMENT (Requests & Blocking)
+    // ==========================================
 
     async function loadRequests() {
         const response = await fetch(`${currentWorkerUrl}/api/admin/filter/requests`, {
@@ -459,107 +548,6 @@
 
         const requests = await response.json();
         clearErrors();
-        renderTable(requests);
-    }
-
-    // New Loader specifically for the Graphing Engine
-    async function loadInsights() {
-        const chartContainer = document.getElementById('chartContainer');
-        const noDataMsg = document.getElementById('noDataMessage');
-        
-        try {
-            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/reports`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${currentSecret}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) throw new Error("Failed to load insights");
-
-            const data = await response.json();
-
-            // GRACEFUL EMPTY STATE HANDLING:
-            // If the server returns our placeholder message, or an empty reports array
-            if (data.message || !data.reports || data.reports.length === 0) {
-                chartContainer.style.display = 'none';
-                noDataMsg.style.display = 'block';
-                
-                const displayText = data.message || "No analytics data available yet. Waiting for Insight Agents to report in.";
-                noDataMsg.innerHTML = `
-                    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted); border: 2px dashed var(--border-color); border-radius: 8px; margin-top: 1rem;">
-                        <span style="font-size: 2rem; display: block; margin-bottom: 1rem;">📡</span>
-                        <strong>${displayText}</strong>
-                    </div>`;
-                return;
-            }
-
-            // Data exists! Hide the message and show the canvas
-            noDataMsg.style.display = 'none';
-            chartContainer.style.display = 'block';
-            renderChart(data.reports);
-
-        } catch (error) {
-            console.error("Insights Graph Error:", error);
-            chartContainer.style.display = 'none';
-            noDataMsg.style.display = 'block';
-            noDataMsg.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--danger);">Failed to load analytics data.</div>`;
-        }
-    }
-
-    function renderChart(reportsData) {
-        const ctx = document.getElementById('roiChart').getContext('2d');
-        
-        // Destroy old chart if it exists so hover states don't glitch
-        if (roiChartInstance) {
-            roiChartInstance.destroy();
-        }
-
-        // Map the data into Chart.js format
-        const labels = reportsData.map(r => r.target);
-        const dataPoints = reportsData.map(r => r.total_minutes);
-
-        // Fetch CSS variables for theming so the chart matches Light/Dark mode
-        const style = getComputedStyle(document.body);
-        const primaryColor = style.getPropertyValue('--primary').trim();
-        const textColor = style.getPropertyValue('--text-muted').trim();
-        const gridColor = style.getPropertyValue('--border-color').trim();
-
-        roiChartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Total Minutes Spent',
-                    data: dataPoints,
-                    backgroundColor: primaryColor,
-                    borderRadius: 6,
-                    barPercentage: 0.6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: gridColor },
-                        ticks: { color: textColor }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: textColor }
-                    }
-                }
-            }
-        });
-    }
-
-    function renderTable(requests) {
         const tbody = document.getElementById('requestsTableBody');
         tbody.innerHTML = "";
 
@@ -672,6 +660,215 @@
             blockBtn.textContent = "Block All Entries";
         }
     }
+
+    // ==========================================
+    // INSIGHTS & ROI MANAGEMENT
+    // ==========================================
+
+    async function loadInsights() {
+        const chartContainer = document.getElementById('chartContainer');
+        const noDataMsg = document.getElementById('noDataMessage');
+        
+        // Grab values from the dynamic filter bar
+        const timeframe = document.getElementById('filterTimeframe').value;
+        const limit = document.getElementById('filterLimit').value;
+        const hash = document.getElementById('filterHash').value.trim();
+        const minMins = document.getElementById('filterMinMins').value;
+        
+        // Construct the query string safely
+        const params = new URLSearchParams({ timeframe, limit });
+        if (minMins) params.append('minMinutes', minMins);
+        if (hash) params.append('studentHash', hash);
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/reports?${params.toString()}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${currentSecret}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) throw new Error("Failed to load insights");
+
+            const data = await response.json();
+
+            // GRACEFUL EMPTY STATE HANDLING:
+            if (data.message || !data.reports || data.reports.length === 0) {
+                chartContainer.style.display = 'none';
+                noDataMsg.style.display = 'block';
+                
+                const displayText = data.message || "No analytics data matched these filters.";
+                noDataMsg.innerHTML = `
+                    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted); border: 2px dashed var(--border-color); border-radius: 8px; margin-top: 1rem;">
+                        <span style="font-size: 2rem; display: block; margin-bottom: 1rem;">📡</span>
+                        <strong>${displayText}</strong>
+                    </div>`;
+                return;
+            }
+
+            // Data exists! Hide the message and show the canvas
+            noDataMsg.style.display = 'none';
+            chartContainer.style.display = 'block';
+            renderChart(data.reports);
+
+        } catch (error) {
+            console.error("Insights Graph Error:", error);
+            chartContainer.style.display = 'none';
+            noDataMsg.style.display = 'block';
+            noDataMsg.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--danger);">Failed to load analytics data.</div>`;
+        }
+    }
+
+    function renderChart(reportsData) {
+        const ctx = document.getElementById('roiChart').getContext('2d');
+        
+        // Destroy old chart if it exists so hover states don't glitch
+        if (roiChartInstance) {
+            roiChartInstance.destroy();
+        }
+
+        // Map the data into Chart.js format
+        const labels = reportsData.map(r => r.target);
+        const dataPoints = reportsData.map(r => r.total_minutes);
+
+        // Fetch CSS variables for theming so the chart matches Light/Dark mode
+        const style = getComputedStyle(document.body);
+        const primaryColor = style.getPropertyValue('--primary').trim();
+        const textColor = style.getPropertyValue('--text-muted').trim();
+        const gridColor = style.getPropertyValue('--border-color').trim();
+
+        roiChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Total Minutes Spent',
+                    data: dataPoints,
+                    backgroundColor: primaryColor,
+                    borderRadius: 6,
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: gridColor },
+                        ticks: { color: textColor }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor }
+                    }
+                }
+            }
+        });
+    }
+
+    // --- Approved Apps Sub-System ---
+
+    async function loadApprovedApps() {
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/apps`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+
+            if (!response.ok) throw new Error("Failed to load approved apps");
+
+            const data = await response.json();
+            const tbody = document.getElementById('approvedAppsTableBody');
+            tbody.innerHTML = "";
+
+            if (!data.apps || data.apps.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No apps have been added to the approved list yet.</td></tr>`;
+                return;
+            }
+
+            data.apps.forEach(app => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${app.domain}</strong></td>
+                    <td>${app.app_name}</td>
+                    <td><span style="background: var(--border-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${app.category || 'General'}</span></td>
+                    <td>
+                        <button class="btn-deny" onclick="removeApprovedApp(${app.id})">Remove</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            console.error("Error loading apps:", error);
+        }
+    }
+
+    async function addApprovedApp() {
+        const domain = document.getElementById('newAppDomain').value.trim();
+        const appName = document.getElementById('newAppName').value.trim();
+        const category = document.getElementById('newAppCategory').value.trim();
+
+        if (!domain || !appName) {
+            alert("Domain and App Name are required.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/apps`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentSecret}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ action: "add", domain, appName, category })
+            });
+
+            if (response.ok) {
+                // Clear inputs
+                document.getElementById('newAppDomain').value = "";
+                document.getElementById('newAppName').value = "";
+                document.getElementById('newAppCategory').value = "";
+                
+                // Refresh table
+                loadApprovedApps();
+            } else {
+                const err = await response.json();
+                alert(`Failed to add app: ${err.error || 'Unknown Error'}`);
+            }
+        } catch (error) {
+            console.error("Error adding app:", error);
+            alert("Network error while adding app.");
+        }
+    }
+
+    async function removeApprovedApp(id) {
+        if (!confirm("Remove this app from the approved tracking list?")) return;
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/apps`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentSecret}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ action: "remove", id: id })
+            });
+
+            if (response.ok) {
+                loadApprovedApps(); // Refresh table
+            } else {
+                alert("Failed to remove app.");
+            }
+        } catch (error) {
+            console.error("Error removing app:", error);
+        }
+    }
+
 </script>
 
 </body>
