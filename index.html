@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Glassbox IT Portal</title>
+    
+    <!-- Import Chart.js for Insights Graphing -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <style>
         /* Modern CSS Variables for Light/Dark Mode */
         :root {
@@ -150,9 +154,35 @@
         .btn-deny { background-color: var(--danger); padding: 0.5rem 1rem; font-size: 0.85rem; }
         .btn-deny:hover { background-color: var(--danger-hover); }
         
-        /* Dashboard Section */
+        /* Dashboard & Tabs Section */
         #dashboard { display: none; }
         
+        .tabs { 
+            display: flex; 
+            gap: 1rem; 
+            margin-bottom: 2rem; 
+            border-bottom: 2px solid var(--border-color); 
+        }
+        .tab-btn { 
+            background: none; 
+            border: none; 
+            padding: 0.75rem 1.5rem; 
+            color: var(--text-muted); 
+            font-weight: 600; 
+            font-size: 1rem;
+            cursor: pointer; 
+            border-bottom: 3px solid transparent; 
+            border-radius: 0; 
+        }
+        .tab-btn:hover { color: var(--text-main); }
+        .tab-btn.active { 
+            color: var(--primary); 
+            border-bottom-color: var(--primary); 
+        }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
         /* Tables */
         table { 
             width: 100%; 
@@ -187,6 +217,14 @@
         .block-table tr:hover td { background-color: transparent; }
         .block-table th { background-color: transparent; border-bottom: 1px solid var(--border-color); }
         
+        /* Charts */
+        .chart-wrapper { 
+            position: relative; 
+            height: 400px; 
+            width: 100%; 
+            margin-top: 1.5rem; 
+        }
+
         /* Status Text & Logging */
         #statusText { margin-top: 1rem; font-weight: bold; }
         .text-error { color: var(--danger); }
@@ -229,51 +267,77 @@
     <pre id="errorLog"></pre>
 
     <div id="dashboard">
-        <div class="admin-controls">
-            <h3>🚫 Manually Block Domains</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Specify targets to block. Choose "Domain" to wildcard subdomains, or "Path" for specific URLs.</p>
-            
-            <table class="block-table" style="width: 100%; margin-top: 0.5rem;">
+        <!-- Dashboard Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('filter', this)">🛡️ Web Filter</button>
+            <button class="tab-btn" onclick="switchTab('insights', this)">📊 Insights & Analytics</button>
+        </div>
+
+        <!-- TAB 1: WEB FILTER -->
+        <div id="tab-filter" class="tab-content active">
+            <div class="admin-controls">
+                <h3>🚫 Manually Block Domains</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Specify targets to block. Choose "Domain" to wildcard subdomains, or "Path" for specific URLs.</p>
+                
+                <table class="block-table" style="width: 100%; margin-top: 0.5rem;">
+                    <thead>
+                        <tr>
+                            <th style="width: 60%;">Target (e.g., badsite.com or badsite.com/games)</th>
+                            <th style="width: 30%;">Match Type</th>
+                            <th style="width: 10%; text-align: center;">Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blockTableBody">
+                        <!-- Rows injected via JS -->
+                    </tbody>
+                </table>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+                    <button type="button" class="btn-secondary" id="addRowBtn" style="padding: 0.5rem 1rem;">+ Add Row</button>
+                    <button type="button" class="btn-deny" id="blockBtn">Block All Entries</button>
+                </div>
+            </div>
+
+            <h2>Pending Unblock Requests</h2>
+            <table>
                 <thead>
                     <tr>
-                        <th style="width: 60%;">Target (e.g., badsite.com or badsite.com/games)</th>
-                        <th style="width: 30%;">Match Type</th>
-                        <th style="width: 10%; text-align: center;">Remove</th>
+                        <th>Date</th>
+                        <th>Student Identity Hash</th>
+                        <th>Requested URL</th>
+                        <th>Academic Reason</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody id="blockTableBody">
+                <tbody id="requestsTableBody">
                     <!-- Rows injected via JS -->
                 </tbody>
             </table>
+        </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
-                <button type="button" class="btn-secondary" id="addRowBtn" style="padding: 0.5rem 1rem;">+ Add Row</button>
-                <button type="button" class="btn-deny" id="blockBtn">Block All Entries</button>
+        <!-- TAB 2: INSIGHTS & ROI -->
+        <div id="tab-insights" class="tab-content">
+            <div class="admin-controls">
+                <h3>📈 Application Usage & ROI Tracking</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Total time spent across tracked applications across the entire district.</p>
+                
+                <div id="noDataMessage"></div>
+                
+                <div class="chart-wrapper" id="chartContainer" style="display: none;">
+                    <canvas id="roiChart"></canvas>
+                </div>
             </div>
         </div>
 
-        <h2>Pending Unblock Requests</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Student Identity Hash</th>
-                    <th>Requested URL</th>
-                    <th>Academic Reason</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="requestsTableBody">
-                </tbody>
-        </table>
     </div>
 </div>
 
 <script>
     let currentWorkerUrl = "";
     let currentSecret = "";
+    let roiChartInstance = null; // Keeps track of the graph instance so we can update it safely
 
-    document.getElementById('connectBtn').addEventListener('click', loadRequests);
+    document.getElementById('connectBtn').addEventListener('click', loadDashboardData);
     document.getElementById('blockBtn').addEventListener('click', blockDomains);
     document.getElementById('addRowBtn').addEventListener('click', () => addBlockRow());
 
@@ -282,7 +346,14 @@
         addBlockRow();
     });
 
-    // Helper to add a dynamic row to the manual block table
+    // Tab Switching Logic
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        btnElement.classList.add('active');
+    }
+
     function addBlockRow(defaultTarget = '', defaultType = 'domain') {
         const tbody = document.getElementById('blockTableBody');
         const tr = document.createElement('tr');
@@ -304,7 +375,6 @@
         tbody.appendChild(tr);
     }
 
-    // Helper function to display verbose errors
     function displayVerboseError(shortMessage, errorObj) {
         const statusText = document.getElementById('statusText');
         const errorLog = document.getElementById('errorLog');
@@ -320,21 +390,18 @@
             detailedMsg += `\nStack Trace:\n${errorObj.stack}\n`;
         }
         
-        // Specific troubleshooting for common network/fetch errors
         const msgLower = (errorObj.message || "").toLowerCase();
         if (msgLower.includes('networkerror') || msgLower.includes('failed to fetch')) {
             detailedMsg += `\n=== TROUBLESHOOTING NETWORK ERRORS ===\n`;
             detailedMsg += `1. Check your URL: Ensure it is exactly correct and does not contain typos.\n`;
             detailedMsg += `   Current Target: ${currentWorkerUrl}\n`;
-            detailedMsg += `2. CORS Issues: The browser may have blocked the request. Ensure your Cloudflare Worker includes 'Access-Control-Allow-Origin' headers in its response.\n`;
+            detailedMsg += `2. CORS Issues: The browser may have blocked the request.\n`;
             detailedMsg += `3. Deployment Status: Is the Cloudflare Worker fully deployed and active?\n`;
-            detailedMsg += `4. Open your browser's Developer Tools (Press F12), go to the "Network" or "Console" tab to see exactly why the request was rejected.`;
         }
         
         errorLog.textContent = detailedMsg;
     }
 
-    // Helper function to clear errors
     function clearErrors() {
         document.getElementById('statusText').textContent = "";
         document.getElementById('statusText').className = "";
@@ -342,7 +409,8 @@
         document.getElementById('errorLog').textContent = "";
     }
 
-    async function loadRequests() {
+    // Main loader that fires off both data requests
+    async function loadDashboardData() {
         const urlInput = document.getElementById('workerUrl').value.trim();
         const secretInput = document.getElementById('adminSecret').value.trim();
         const statusText = document.getElementById('statusText');
@@ -353,7 +421,6 @@
             return;
         }
 
-        // Clean up URL trailing slash if it exists
         currentWorkerUrl = urlInput.endsWith('/') ? urlInput.slice(0, -1) : urlInput;
         currentSecret = secretInput;
 
@@ -361,28 +428,12 @@
         statusText.textContent = "Connecting...";
         
         try {
-            // 🛠️ UPDATED ROUTE: Pointing to the new modular Filter API
-            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/requests`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${currentSecret}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.status === 401) {
-                throw new Error("Unauthorized: Incorrect Admin Secret");
-            } else if (!response.ok) {
-                throw new Error(`Server Error: Received HTTP Status ${response.status}`);
-            }
-
-            const requests = await response.json();
+            // Wait for requests to load to verify auth is successful
+            await loadRequests();
             
-            // Switch UI on success
-            clearErrors();
+            // If auth is successful, show dashboard and fetch insights
             document.getElementById('dashboard').style.display = "block";
-            
-            renderTable(requests);
+            loadInsights(); // Non-blocking load for insights tab
 
         } catch (error) {
             console.error(error);
@@ -391,9 +442,126 @@
         }
     }
 
+    async function loadRequests() {
+        const response = await fetch(`${currentWorkerUrl}/api/admin/filter/requests`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${currentSecret}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.status === 401) {
+            throw new Error("Unauthorized: Incorrect Admin Secret");
+        } else if (!response.ok) {
+            throw new Error(`Server Error: Received HTTP Status ${response.status}`);
+        }
+
+        const requests = await response.json();
+        clearErrors();
+        renderTable(requests);
+    }
+
+    // New Loader specifically for the Graphing Engine
+    async function loadInsights() {
+        const chartContainer = document.getElementById('chartContainer');
+        const noDataMsg = document.getElementById('noDataMessage');
+        
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/reports`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${currentSecret}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) throw new Error("Failed to load insights");
+
+            const data = await response.json();
+
+            // GRACEFUL EMPTY STATE HANDLING:
+            // If the server returns our placeholder message, or an empty reports array
+            if (data.message || !data.reports || data.reports.length === 0) {
+                chartContainer.style.display = 'none';
+                noDataMsg.style.display = 'block';
+                
+                const displayText = data.message || "No analytics data available yet. Waiting for Insight Agents to report in.";
+                noDataMsg.innerHTML = `
+                    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted); border: 2px dashed var(--border-color); border-radius: 8px; margin-top: 1rem;">
+                        <span style="font-size: 2rem; display: block; margin-bottom: 1rem;">📡</span>
+                        <strong>${displayText}</strong>
+                    </div>`;
+                return;
+            }
+
+            // Data exists! Hide the message and show the canvas
+            noDataMsg.style.display = 'none';
+            chartContainer.style.display = 'block';
+            renderChart(data.reports);
+
+        } catch (error) {
+            console.error("Insights Graph Error:", error);
+            chartContainer.style.display = 'none';
+            noDataMsg.style.display = 'block';
+            noDataMsg.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--danger);">Failed to load analytics data.</div>`;
+        }
+    }
+
+    function renderChart(reportsData) {
+        const ctx = document.getElementById('roiChart').getContext('2d');
+        
+        // Destroy old chart if it exists so hover states don't glitch
+        if (roiChartInstance) {
+            roiChartInstance.destroy();
+        }
+
+        // Map the data into Chart.js format
+        const labels = reportsData.map(r => r.target);
+        const dataPoints = reportsData.map(r => r.total_minutes);
+
+        // Fetch CSS variables for theming so the chart matches Light/Dark mode
+        const style = getComputedStyle(document.body);
+        const primaryColor = style.getPropertyValue('--primary').trim();
+        const textColor = style.getPropertyValue('--text-muted').trim();
+        const gridColor = style.getPropertyValue('--border-color').trim();
+
+        roiChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Total Minutes Spent',
+                    data: dataPoints,
+                    backgroundColor: primaryColor,
+                    borderRadius: 6,
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: gridColor },
+                        ticks: { color: textColor }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor }
+                    }
+                }
+            }
+        });
+    }
+
     function renderTable(requests) {
         const tbody = document.getElementById('requestsTableBody');
-        tbody.innerHTML = ""; // Clear old rows
+        tbody.innerHTML = "";
 
         if (requests.length === 0) {
             tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No pending requests! 🎉</td></tr>`;
@@ -402,7 +570,6 @@
 
         requests.forEach(req => {
             const date = new Date(req.created_at).toLocaleString();
-            
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${date}</td>
@@ -421,10 +588,8 @@
     async function resolveRequest(requestId, action, fullUrl) {
         if (!confirm(`Are you sure you want to ${action} this request?`)) return;
 
-        // Extract just the domain name for the DNR rule engine by default
         let target = fullUrl;
         try {
-            // Add https:// if student forgot it so URL parser works
             const parsedUrl = new URL(fullUrl.startsWith('http') ? fullUrl : `https://${fullUrl}`);
             target = parsedUrl.hostname;
         } catch (e) {
@@ -432,7 +597,6 @@
         }
 
         try {
-            // 🛠️ UPDATED ROUTE: Pointing to the new modular Filter API
             const response = await fetch(`${currentWorkerUrl}/api/admin/filter/resolve`, {
                 method: 'POST',
                 headers: {
@@ -443,13 +607,13 @@
                     requestId: requestId,
                     action: action,
                     target: target,
-                    matchType: 'domain' // Automatically unblock the domain when approving
+                    matchType: 'domain'
                 })
             });
 
             if (response.ok) {
                 alert(`Request ${action}d successfully!`);
-                loadRequests(); // Refresh the table
+                loadRequests(); 
             } else {
                 throw new Error(`Failed to resolve request. Server returned HTTP ${response.status}`);
             }
@@ -463,11 +627,9 @@
         const rows = document.querySelectorAll('#blockTableBody tr');
         const blocks = [];
 
-        // Scrape data from the dynamic table
         rows.forEach(row => {
             const target = row.querySelector('.block-target').value.trim();
             const matchType = row.querySelector('.block-type').value;
-            
             if (target) {
                 blocks.push({ target: target, matchType: matchType });
             }
@@ -485,7 +647,6 @@
         blockBtn.textContent = "Blocking...";
 
         try {
-            // 🛠️ UPDATED ROUTE: Pointing to the new modular Filter API
             const response = await fetch(`${currentWorkerUrl}/api/admin/filter/block`, {
                 method: 'POST',
                 headers: {
@@ -497,7 +658,6 @@
 
             if (response.ok) {
                 alert(`Successfully blocked ${blocks.length} entry/entries!`);
-                // Clear the table and leave one fresh row
                 document.getElementById('blockTableBody').innerHTML = '';
                 addBlockRow();
                 clearErrors();
