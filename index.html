@@ -201,7 +201,8 @@
         statusText.textContent = "Connecting...";
         
         try {
-            const response = await fetch(`${currentWorkerUrl}/api/admin/requests`, {
+            // 🛠️ UPDATED ROUTE: Pointing to the new modular Filter API
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/requests`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${currentSecret}`,
@@ -271,7 +272,8 @@
         }
 
         try {
-            const response = await fetch(`${currentWorkerUrl}/api/admin/resolve`, {
+            // 🛠️ UPDATED ROUTE: Pointing to the new modular Filter API
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/resolve`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${currentSecret}`,
@@ -323,7 +325,8 @@
         blockBtn.textContent = "Blocking...";
 
         try {
-            const response = await fetch(`${currentWorkerUrl}/api/admin/block`, {
+            // 🛠️ UPDATED ROUTE: Pointing to the new modular Filter API
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/block`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${currentSecret}`,
