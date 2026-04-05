@@ -604,11 +604,25 @@
         if (!confirm(`Are you sure you want to ${action} this request?`)) return;
 
         let target = fullUrl;
+        let matchType = 'domain';
+
         try {
-            const parsedUrl = new URL(fullUrl.startsWith('http') ? fullUrl : `https://${fullUrl}`);
-            target = parsedUrl.hostname;
+            // Clean up the URL by stripping protocols and www.
+            let cleanUrl = fullUrl.replace(/^https?:\/\//, '').replace(/^www\./, '');
+
+            // If it has a slash (and the slash isn't just at the very end), it's a path rule!
+            if (cleanUrl.includes('/') && cleanUrl.split('/')[1] !== '') {
+                target = cleanUrl;
+                matchType = 'path';
+            } else {
+                // It's just a domain. Strip any trailing slash.
+                target = cleanUrl.replace(/\/$/, ''); 
+                matchType = 'domain';
+            }
         } catch (e) {
-            console.warn("Could not parse URL, using raw input as target.");
+            console.warn("Could not parse URL intelligently, using raw input as domain target.");
+            target = fullUrl;
+            matchType = 'domain';
         }
 
         try {
@@ -622,7 +636,7 @@
                     requestId: requestId,
                     action: action,
                     target: target,
-                    matchType: 'domain'
+                    matchType: matchType // dynamically set based on our logic above
                 })
             });
 
