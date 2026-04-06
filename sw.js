@@ -83,6 +83,23 @@ self.addEventListener('notificationclick', function(event) {
                     return;
                 }
 
+                // 🎯 FIX: Extract and sanitize the URL exactly like the dashboard UI does
+                let finalTarget = data.url;
+                let finalMatchType = data.matchType || 'domain';
+
+                try {
+                    let cleanUrl = data.url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+                    if (cleanUrl.includes('/') && cleanUrl.split('/')[1] !== '') {
+                        finalTarget = cleanUrl;
+                        finalMatchType = 'path';
+                    } else {
+                        finalTarget = cleanUrl.replace(/\/$/, '');
+                        finalMatchType = 'domain';
+                    }
+                } catch (e) {
+                    console.warn("Could not parse URL intelligently, using raw input.");
+                }
+
                 // Fire the exact same POST request the dashboard uses
                 await fetch(`${workerUrl}/api/admin/filter/resolve`, {
                     method: 'POST',
@@ -93,8 +110,8 @@ self.addEventListener('notificationclick', function(event) {
                     body: JSON.stringify({
                         requestId: data.requestId,
                         action: action,
-                        target: data.target,
-                        matchType: data.matchType || 'domain'
+                        target: finalTarget,
+                        matchType: finalMatchType
                     })
                 });
                 
