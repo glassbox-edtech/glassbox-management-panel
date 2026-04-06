@@ -329,6 +329,38 @@
                 </div>
             </div>
 
+            <!-- NEW: ACTIVE FILTER RULES PAGINATED TABLE -->
+            <div class="admin-controls">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3>📋 Active Filter Rules</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">View and manage currently active blocks and exceptions.</p>
+                    </div>
+                    <button class="btn-secondary" onclick="loadActiveFilters()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
+                </div>
+                
+                <table style="margin-top: 1rem;">
+                    <thead>
+                        <tr>
+                            <th>Target</th>
+                            <th>Match Type</th>
+                            <th>Action</th>
+                            <th style="width: 100px; text-align: center;">Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activeRulesTableBody">
+                        <!-- Rows injected via JS -->
+                    </tbody>
+                </table>
+                
+                <!-- Pagination Controls -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                    <button class="btn-secondary" id="btnPrevRules" onclick="changeFilterPage(-1)" disabled>← Previous</button>
+                    <span id="rulesPageIndicator" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Page 1</span>
+                    <button class="btn-secondary" id="btnNextRules" onclick="changeFilterPage(1)" disabled>Next →</button>
+                </div>
+            </div>
+
             <h2>Pending Unblock Requests</h2>
             <table>
                 <thead>
@@ -525,6 +557,11 @@
     let currentSecret = "";
     let roiChartInstance = null; // Keeps track of the graph instance so we can update it safely
 
+    // Filter Pagination State
+    let currentFilterPage = 1;
+    const filterPageLimit = 10;
+    let totalFilterPages = 1;
+
     document.getElementById('connectBtn').addEventListener('click', loadDashboardData);
     document.getElementById('blockBtn').addEventListener('click', blockDomains);
     document.getElementById('addRowBtn').addEventListener('click', () => addBlockRow());
@@ -622,6 +659,7 @@
             
             // If auth is successful, show dashboard and fetch Insights data
             document.getElementById('dashboard').style.display = "block";
+            loadActiveFilters(); // Load the paginated active rules
             refreshInsightsTab(); 
             loadApprovedApps();
             loadSettings();
@@ -772,6 +810,7 @@
                 alert(`Successfully blocked ${blocks.length} entry/entries!`);
                 document.getElementById('blockTableBody').innerHTML = '';
                 addBlockRow();
+                loadActiveFilters(1); // Jump to page 1 to see the new blocks
                 clearErrors();
             } else {
                 throw new Error(`Failed to block entries. Server returned HTTP ${response.status}`);
@@ -782,6 +821,98 @@
         } finally {
             blockBtn.disabled = false;
             blockBtn.textContent = "Block All Entries";
+        }
+    }
+
+    // ==========================================
+    // NEW: PAGINATED FILTER RULES
+    // ==========================================
+    
+    async function loadActiveFilters(page = currentFilterPage) {
+        currentFilterPage = page;
+        const tbody = document.getElementById('activeRulesTableBody');
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading active rules...</td></tr>`;
+        
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/rules?page=${page}&limit=${filterPageLimit}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+
+            if (!response.ok) throw new Error("Failed to load active rules");
+
+            const data = await response.json();
+            tbody.innerHTML = "";
+
+            if (!data.rules || data.rules.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No active rules found.</td></tr>`;
+                document.getElementById('rulesPageIndicator').textContent = "Page 1 of 1";
+                document.getElementById('btnPrevRules').disabled = true;
+                document.getElementById('btnNextRules').disabled = true;
+                return;
+            }
+
+            totalFilterPages = Math.ceil(data.total / filterPageLimit) || 1;
+            document.getElementById('rulesPageIndicator').textContent = `Page ${currentFilterPage} of ${totalFilterPages}`;
+            document.getElementById('btnPrevRules').disabled = currentFilterPage <= 1;
+            document.getElementById('btnNextRules').disabled = currentFilterPage >= totalFilterPages;
+
+            data.rules.forEach(rule => {
+                const isBlock = rule.action === 'block';
+                const actionBadge = `<span style="background: ${isBlock ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${rule.action}</span>`;
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-family: monospace; font-size: 0.9rem;">${rule.target}</td>
+                    <td style="text-transform: capitalize;">${rule.match_type}</td>
+                    <td>${actionBadge}</td>
+                    <td style="text-align: center;">
+                        <button class="btn-deny" onclick="removeActiveRule(${rule.id}, '${rule.target}')" style="padding: 0.4rem 0.6rem;">Remove</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            console.error("Error loading active rules:", error);
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger); padding: 2rem;">Failed to load active rules.</td></tr>`;
+        }
+    }
+
+    function changeFilterPage(direction) {
+        const newPage = currentFilterPage + direction;
+        if (newPage >= 1 && newPage <= totalFilterPages) {
+            loadActiveFilters(newPage);
+        }
+    }
+
+    async function removeActiveRule(ruleId, target) {
+        if (!confirm(`Are you sure you want to remove the active rule for:\n\n${target}?`)) return;
+        
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/rules/remove`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentSecret}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ruleId: ruleId })
+            });
+
+            if (response.ok) {
+                // If we removed the last item on a page, try jumping back one page
+                const tbody = document.getElementById('activeRulesTableBody');
+                if (tbody.children.length === 1 && currentFilterPage > 1) {
+                    loadActiveFilters(currentFilterPage - 1);
+                } else {
+                    loadActiveFilters(currentFilterPage);
+                }
+            } else {
+                const err = await response.json();
+                throw new Error(err.error || "Failed to remove rule");
+            }
+        } catch (error) {
+            console.error(error);
+            alert(`Error removing rule: ${error.message}`);
         }
     }
 
