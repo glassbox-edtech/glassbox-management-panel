@@ -405,7 +405,7 @@
                         </select>
                     </div>
                     <div class="filter-item">
-                        <label>Display Limit</label>
+                        <label>Display Limit (Total Fetched)</label>
                         <input type="number" id="filterLimit" value="50" min="5" max="200">
                     </div>
                     <div class="filter-item">
@@ -442,6 +442,13 @@
                             <!-- Rows injected via JS -->
                         </tbody>
                     </table>
+                    
+                    <!-- Analytics Pagination Controls -->
+                    <div id="roiPagination" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: none;">
+                        <button class="btn-secondary" id="btnPrevRoi" onclick="changeRoiPage(-1)" disabled>← Previous</button>
+                        <span id="pageIndicatorRoi" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Page 1</span>
+                        <button class="btn-secondary" id="btnNextRoi" onclick="changeRoiPage(1)" disabled>Next →</button>
+                    </div>
                 </div>
             </div>
 
@@ -468,6 +475,12 @@
                         <!-- Rows injected via JS -->
                     </tbody>
                 </table>
+                
+                <div id="outliersPagination" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: none;">
+                    <button class="btn-secondary" id="btnPrevOutliers" onclick="changeOutliersPage(-1)" disabled>← Previous</button>
+                    <span id="pageIndicatorOutliers" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Page 1</span>
+                    <button class="btn-secondary" id="btnNextOutliers" onclick="changeOutliersPage(1)" disabled>Next →</button>
+                </div>
             </div>
 
             <!-- LIVE TRAFFIC AUDIT TABLE -->
@@ -493,6 +506,12 @@
                         <!-- Rows injected via JS -->
                     </tbody>
                 </table>
+                
+                <div id="trafficPagination" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: none;">
+                    <button class="btn-secondary" id="btnPrevTraffic" onclick="changeTrafficPage(-1)" disabled>← Previous</button>
+                    <span id="pageIndicatorTraffic" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Page 1</span>
+                    <button class="btn-secondary" id="btnNextTraffic" onclick="changeTrafficPage(1)" disabled>Next →</button>
+                </div>
             </div>
 
             <div class="admin-controls">
@@ -561,6 +580,12 @@
     let currentFilterPage = 1;
     const filterPageLimit = 10;
     let totalFilterPages = 1;
+    
+    // Analytics Pagination State
+    let roiData = [], currentRoiPage = 1;
+    let outliersData = [], currentOutliersPage = 1;
+    let trafficData = [], currentTrafficPage = 1;
+    const analyticsPageLimit = 10;
 
     document.getElementById('connectBtn').addEventListener('click', loadDashboardData);
     document.getElementById('blockBtn').addEventListener('click', blockDomains);
@@ -825,7 +850,7 @@
     }
 
     // ==========================================
-    // NEW: PAGINATED FILTER RULES
+    // PAGINATED FILTER RULES
     // ==========================================
     
     async function loadActiveFilters(page = currentFilterPage) {
@@ -917,7 +942,7 @@
     }
 
     // ==========================================
-    // INSIGHTS & ROI MANAGEMENT
+    // INSIGHTS & ROI MANAGEMENT (CLIENT-SIDE PAGINATION)
     // ==========================================
 
     function refreshInsightsTab() {
@@ -976,8 +1001,11 @@
             noDataMsg.style.display = 'none';
             chartContainer.style.display = 'block';
             roiTableContainer.style.display = 'block';
+            
+            // Render chart with all data, but paginate the table
             renderChart(data.reports);
-            renderRoiTable(data.reports);
+            roiData = data.reports;
+            displayRoiPage(1);
 
         } catch (error) {
             console.error("Insights Graph Error:", error);
@@ -988,10 +1016,18 @@
         }
     }
 
-    function renderRoiTable(reports) {
+    // --- ROI Display & Pagination ---
+    function displayRoiPage(page) {
+        currentRoiPage = page;
         const tbody = document.getElementById('roiTableBody');
         tbody.innerHTML = "";
-        reports.forEach(r => {
+        
+        const totalPages = Math.ceil(roiData.length / analyticsPageLimit) || 1;
+        const startIndex = (page - 1) * analyticsPageLimit;
+        const endIndex = startIndex + analyticsPageLimit;
+        const pageData = roiData.slice(startIndex, endIndex);
+
+        pageData.forEach(r => {
             const avg = r.unique_students > 0 ? (r.total_minutes / r.unique_students).toFixed(1) : r.total_minutes;
             const isOutlier = avg > 60; // Flag if average is over 60 mins
             const flame = isOutlier ? '<span title="High average time per user!" style="color: var(--danger); margin-left: 0.5rem; font-size: 1.1rem;">🔥</span>' : '';
@@ -1005,6 +1041,19 @@
             `;
             tbody.appendChild(tr);
         });
+
+        document.getElementById('pageIndicatorRoi').textContent = `Page ${page} of ${totalPages}`;
+        document.getElementById('btnPrevRoi').disabled = page <= 1;
+        document.getElementById('btnNextRoi').disabled = page >= totalPages;
+        document.getElementById('roiPagination').style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+
+    function changeRoiPage(direction) {
+        const newPage = currentRoiPage + direction;
+        const totalPages = Math.ceil(roiData.length / analyticsPageLimit) || 1;
+        if (newPage >= 1 && newPage <= totalPages) {
+            displayRoiPage(newPage);
+        }
     }
 
     function renderChart(reportsData) {
@@ -1063,15 +1112,17 @@
     async function loadOutliers() {
         const tbody = document.getElementById('outliersTableBody');
         tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading outlier data...</td></tr>`;
+        document.getElementById('outliersPagination').style.display = 'none';
 
         const timeframe = document.getElementById('filterTimeframe').value;
         const statusFilter = document.getElementById('filterStatus').value;
+        const limit = document.getElementById('filterLimit').value;
         const minMins = document.getElementById('filterMinMins').value || 0; 
         
         // For outliers, we force a minimum of 60 minutes unless the admin explicitly typed a higher number
         const outlierMin = Math.max(60, parseInt(minMins));
 
-        const params = new URLSearchParams({ limit: 50, minMinutes: outlierMin });
+        const params = new URLSearchParams({ limit: limit, minMinutes: outlierMin });
         if (timeframe) params.append('timeframe', timeframe);
         if (statusFilter !== 'all') params.append('statusFilter', statusFilter);
 
@@ -1087,30 +1138,57 @@
             if (!response.ok) throw new Error("Failed to load outliers");
 
             const data = await response.json();
-            tbody.innerHTML = "";
-
+            
             if (!data.outliers || data.outliers.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No extreme outliers detected.</td></tr>`;
                 return;
             }
 
-            data.outliers.forEach(row => {
-                const tr = document.createElement('tr');
-                const domain = row.target.split('/')[0];
-                tr.innerHTML = `
-                    <td class="hash-cell" title="${row.student_hash}">${row.student_hash.substring(0, 16)}...</td>
-                    <td style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">${row.target}</td>
-                    <td style="color: var(--danger); font-weight: bold;">${row.total_minutes} min</td>
-                    <td class="actions">
-                        <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')" title="Block this exact URL">Block Path</button>
-                        <button class="btn-deny" onclick="quickBlock('${domain}', 'domain')" title="Block the entire domain" style="background-color: var(--secondary);">Block Domain</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+            outliersData = data.outliers;
+            displayOutliersPage(1);
+
         } catch (error) {
             console.error("Outliers Error:", error);
             tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger); padding: 2rem;">Failed to load outliers.</td></tr>`;
+        }
+    }
+
+    function displayOutliersPage(page) {
+        currentOutliersPage = page;
+        const tbody = document.getElementById('outliersTableBody');
+        tbody.innerHTML = "";
+        
+        const totalPages = Math.ceil(outliersData.length / analyticsPageLimit) || 1;
+        const startIndex = (page - 1) * analyticsPageLimit;
+        const endIndex = startIndex + analyticsPageLimit;
+        const pageData = outliersData.slice(startIndex, endIndex);
+
+        pageData.forEach(row => {
+            const tr = document.createElement('tr');
+            const domain = row.target.split('/')[0];
+            tr.innerHTML = `
+                <td class="hash-cell" title="${row.student_hash}">${row.student_hash.substring(0, 16)}...</td>
+                <td style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">${row.target}</td>
+                <td style="color: var(--danger); font-weight: bold;">${row.total_minutes} min</td>
+                <td class="actions">
+                    <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')" title="Block this exact URL">Block Path</button>
+                    <button class="btn-deny" onclick="quickBlock('${domain}', 'domain')" title="Block the entire domain" style="background-color: var(--secondary);">Block Domain</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('pageIndicatorOutliers').textContent = `Page ${page} of ${totalPages}`;
+        document.getElementById('btnPrevOutliers').disabled = page <= 1;
+        document.getElementById('btnNextOutliers').disabled = page >= totalPages;
+        document.getElementById('outliersPagination').style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+
+    function changeOutliersPage(direction) {
+        const newPage = currentOutliersPage + direction;
+        const totalPages = Math.ceil(outliersData.length / analyticsPageLimit) || 1;
+        if (newPage >= 1 && newPage <= totalPages) {
+            displayOutliersPage(newPage);
         }
     }
 
@@ -1119,10 +1197,13 @@
     async function loadLiveTraffic() {
         const tbody = document.getElementById('liveTrafficTableBody');
         tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading traffic data...</td></tr>`;
+        document.getElementById('trafficPagination').style.display = 'none';
 
         const timeframe = document.getElementById('filterTimeframe').value;
         const statusFilter = document.getElementById('filterStatus').value;
-        const params = new URLSearchParams({ limit: 50 });
+        const limit = document.getElementById('filterLimit').value;
+        
+        const params = new URLSearchParams({ limit: limit });
         if (timeframe) params.append('timeframe', timeframe);
         if (statusFilter !== 'all') params.append('statusFilter', statusFilter);
 
@@ -1138,38 +1219,65 @@
             if (!response.ok) throw new Error("Failed to load live traffic");
 
             const data = await response.json();
-            tbody.innerHTML = "";
 
             if (!data.traffic || data.traffic.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No live traffic data available yet.</td></tr>`;
                 return;
             }
 
-            data.traffic.forEach(row => {
-                const tr = document.createElement('tr');
-                
-                // Status Badge styling
-                const isApproved = row.status === 'approved';
-                const badgeColor = isApproved ? 'var(--success)' : 'var(--danger)';
-                const statusBadge = `<span style="background: ${badgeColor}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${row.status.toUpperCase()}</span>`;
-                
-                // Extract the root domain for the "Block Domain" quick action
-                const domain = row.target.split('/')[0];
+            trafficData = data.traffic;
+            displayTrafficPage(1);
 
-                tr.innerHTML = `
-                    <td style="word-break: break-all; font-family: monospace; font-size: 0.85rem;">${row.target}</td>
-                    <td>${statusBadge}</td>
-                    <td><strong>${row.hits}</strong></td>
-                    <td class="actions">
-                        <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')" title="Block this exact URL">Block Path</button>
-                        <button class="btn-deny" onclick="quickBlock('${domain}', 'domain')" title="Block the entire domain" style="background-color: var(--secondary);">Block Domain</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
         } catch (error) {
             console.error("Traffic Error:", error);
             tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger); padding: 2rem;">Failed to load traffic data.</td></tr>`;
+        }
+    }
+
+    function displayTrafficPage(page) {
+        currentTrafficPage = page;
+        const tbody = document.getElementById('liveTrafficTableBody');
+        tbody.innerHTML = "";
+        
+        const totalPages = Math.ceil(trafficData.length / analyticsPageLimit) || 1;
+        const startIndex = (page - 1) * analyticsPageLimit;
+        const endIndex = startIndex + analyticsPageLimit;
+        const pageData = trafficData.slice(startIndex, endIndex);
+
+        pageData.forEach(row => {
+            const tr = document.createElement('tr');
+            
+            // Status Badge styling
+            const isApproved = row.status === 'approved';
+            const badgeColor = isApproved ? 'var(--success)' : 'var(--danger)';
+            const statusBadge = `<span style="background: ${badgeColor}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${row.status.toUpperCase()}</span>`;
+            
+            // Extract the root domain for the "Block Domain" quick action
+            const domain = row.target.split('/')[0];
+
+            tr.innerHTML = `
+                <td style="word-break: break-all; font-family: monospace; font-size: 0.85rem;">${row.target}</td>
+                <td>${statusBadge}</td>
+                <td><strong>${row.hits}</strong></td>
+                <td class="actions">
+                    <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')" title="Block this exact URL">Block Path</button>
+                    <button class="btn-deny" onclick="quickBlock('${domain}', 'domain')" title="Block the entire domain" style="background-color: var(--secondary);">Block Domain</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('pageIndicatorTraffic').textContent = `Page ${page} of ${totalPages}`;
+        document.getElementById('btnPrevTraffic').disabled = page <= 1;
+        document.getElementById('btnNextTraffic').disabled = page >= totalPages;
+        document.getElementById('trafficPagination').style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+
+    function changeTrafficPage(direction) {
+        const newPage = currentTrafficPage + direction;
+        const totalPages = Math.ceil(trafficData.length / analyticsPageLimit) || 1;
+        if (newPage >= 1 && newPage <= totalPages) {
+            displayTrafficPage(newPage);
         }
     }
 
