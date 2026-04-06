@@ -66,7 +66,8 @@ self.addEventListener('notificationclick', function(event) {
 
     // If they just clicked the body of the notification, open the dashboard
     if (!action) {
-        event.waitUntil(clients.openWindow('/'));
+        // 🎯 FIX: Use self.registration.scope instead of '/' to support GitHub pages paths
+        event.waitUntil(clients.openWindow(self.registration.scope));
         return;
     }
 
