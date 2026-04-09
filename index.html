@@ -419,7 +419,16 @@
 
                 <div class="action-header">
                     <button type="button" class="btn-secondary" id="addRowBtn" style="padding: 0.5rem 1rem;">+ Add Row</button>
-                    <button type="button" class="btn-deny" id="blockBtn">Block All Entries</button>
+                    <!-- 🎯 NEW: Duration dropdown for manual batch blocking -->
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <select id="globalBlockDuration" style="padding: 0.5rem; font-size: 0.85rem;">
+                            <option value="0">Permanent</option>
+                            <option value="1">1 Hour</option>
+                            <option value="24">24 Hours</option>
+                            <option value="168">1 Week</option>
+                        </select>
+                        <button type="button" class="btn-deny" id="blockBtn">Block All Entries</button>
+                    </div>
                 </div>
             </div>
 
@@ -440,6 +449,7 @@
                                 <th>Target</th>
                                 <th>Match Type</th>
                                 <th>Action</th>
+                                <th>Expires At</th>
                                 <th style="width: 100px; text-align: center;">Remove</th>
                             </tr>
                         </thead>
@@ -909,14 +919,28 @@
         requests.forEach(req => {
             const date = new Date(req.created_at).toLocaleString();
             const tr = document.createElement('tr');
+            
+            // 🎯 NEW: Inline dropdown for approval duration
+            const durationSelect = `
+                <select id="duration-${req.id}" style="padding: 0.4rem; font-size: 0.8rem; margin-bottom: 0.5rem; width: 100%;">
+                    <option value="0">Permanent</option>
+                    <option value="1">1 Hour</option>
+                    <option value="24">24 Hours</option>
+                    <option value="168">1 Week</option>
+                </select>
+            `;
+
             tr.innerHTML = `
                 <td>${date}</td>
                 <td class="hash-cell">${req.student_hash.substring(0, 16)}...</td>
                 <td><strong>${req.url}</strong></td>
                 <td class="reason-cell">${req.reason}</td>
-                <td class="actions">
-                    <button class="btn-approve" onclick="resolveRequest(${req.id}, 'approve', '${req.url}')">Approve</button>
-                    <button class="btn-deny" onclick="resolveRequest(${req.id}, 'deny', '${req.url}')">Deny</button>
+                <td class="actions" style="flex-direction: column; align-items: flex-start;">
+                    ${durationSelect}
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn-approve" onclick="resolveRequest(${req.id}, 'approve', '${req.url}')">Approve</button>
+                        <button class="btn-deny" onclick="resolveRequest(${req.id}, 'deny', '${req.url}')">Deny</button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -928,6 +952,12 @@
 
         let target = fullUrl;
         let matchType = 'domain';
+        let expiresInHours = 0; // 🎯 NEW: Grab duration from the UI
+
+        if (action === 'approve') {
+            const selectEl = document.getElementById(`duration-${requestId}`);
+            if (selectEl) expiresInHours = parseFloat(selectEl.value);
+        }
 
         try {
             // Clean up the URL by stripping protocols and www.
@@ -959,7 +989,8 @@
                     requestId: requestId,
                     action: action,
                     target: target,
-                    matchType: matchType // dynamically set based on our logic above
+                    matchType: matchType, // dynamically set based on our logic above
+                    expiresInHours: expiresInHours // 🎯 NEW: Send expiration to backend
                 })
             });
 
@@ -998,6 +1029,10 @@
 
         if (!confirm(`Are you sure you want to block ${blocks.length} entry/entries?`)) return;
 
+        // 🎯 NEW: Grab the global expiration setting
+        const durationSelect = document.getElementById('globalBlockDuration');
+        const expiresInHours = durationSelect ? parseFloat(durationSelect.value) : 0;
+
         const blockBtn = document.getElementById('blockBtn');
         blockBtn.disabled = true;
         blockBtn.textContent = "Blocking...";
@@ -1009,7 +1044,7 @@
                     'Authorization': `Bearer ${currentSecret}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ blocks: blocks })
+                body: JSON.stringify({ blocks: blocks, expiresInHours: expiresInHours }) // 🎯 NEW: Added expiration payload
             });
 
             if (response.ok) {
@@ -1067,11 +1102,32 @@
                 const isBlock = rule.action === 'block';
                 const actionBadge = `<span style="background: ${isBlock ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${rule.action}</span>`;
                 
+                // 🎯 NEW: Format the expiration timestamp nicely
+                let expiresText = '<span style="color: var(--text-muted);">Permanent</span>';
+                if (rule.expires_at) {
+                    // SQLite stores it as UTC but doesn't append 'Z'. Adding 'Z' ensures the browser parses it correctly.
+                    const utcDateStr = rule.expires_at.replace(' ', 'T') + 'Z';
+                    const d = new Date(utcDateStr);
+                    
+                    if (!isNaN(d.getTime())) {
+                        expiresText = d.toLocaleString(undefined, { 
+                            month: 'short', day: 'numeric', 
+                            hour: 'numeric', minute: '2-digit' 
+                        });
+                        
+                        // Highlight in orange if it expires soon (within 2 hours)
+                        if (d.getTime() - Date.now() < 7200000) {
+                            expiresText = `<span style="color: #f59e0b; font-weight: bold;">${expiresText} ⏳</span>`;
+                        }
+                    }
+                }
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="font-family: monospace; font-size: 0.9rem;">${rule.target}</td>
                     <td style="text-transform: capitalize;">${rule.match_type}</td>
                     <td>${actionBadge}</td>
+                    <td style="font-size: 0.85rem;">${expiresText}</td>
                     <td style="text-align: center;">
                         <button class="btn-deny" onclick="removeActiveRule(${rule.id}, '${rule.target}')" style="padding: 0.4rem 0.6rem;">Remove</button>
                     </td>
