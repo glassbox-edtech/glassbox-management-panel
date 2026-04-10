@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glassbox Teacher Portal</title>
+    
+    <style>
+        /* Modern CSS Variables - Emerald/Green Theme for Teachers */
+        :root {
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --primary: #059669; /* Emerald Green */
+            --primary-hover: #047857;
+            --secondary: #6b7280;
+            --secondary-hover: #4b5563;
+            --danger: #dc2626;
+            --danger-hover: #b91c1c;
+            --success: #059669;
+            --success-hover: #047857;
+            --input-bg: #ffffff;
+            --input-border: #d1d5db;
+            --error-bg: #fee2e2;
+            --error-text: #991b1b;
+            --error-border: #f87171;
+            --table-header-bg: #f9fafb;
+            --panel-bg: #f9fafb;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #0f172a;
+                --card-bg: #1e293b;
+                --text-main: #f8fafc;
+                --text-muted: #94a3b8;
+                --border-color: #334155;
+                --primary: #10b981;
+                --primary-hover: #34d399;
+                --secondary: #64748b;
+                --secondary-hover: #94a3b8;
+                --danger: #ef4444;
+                --danger-hover: #f87171;
+                --success: #10b981;
+                --success-hover: #34d399;
+                --input-bg: #0f172a;
+                --input-border: #475569;
+                --error-bg: #7f1d1d;
+                --error-text: #fca5a5;
+                --error-border: #991b1b;
+                --table-header-bg: #0f172a;
+                --panel-bg: #0f172a;
+            }
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            margin: 0; 
+            padding: 2rem; 
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container { 
+            max-width: 900px; 
+            margin: 0 auto; 
+            background: var(--card-bg); 
+            padding: 2rem; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+            border: 1px solid var(--border-color);
+        }
+
+        h1, h2, h3 { color: var(--text-main); margin-top: 0; }
+        h1 { border-bottom: 2px solid var(--border-color); padding-bottom: 1rem; }
+        
+        .admin-controls { 
+            background: var(--panel-bg); 
+            padding: 1.5rem; 
+            border-radius: 8px; 
+            border: 1px solid var(--border-color); 
+            margin-bottom: 2rem; 
+        }
+        
+        .config-panel { display: flex; gap: 1.5rem; align-items: flex-end; }
+        .input-group { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+        label { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); }
+
+        input, select { 
+            padding: 0.75rem; 
+            border: 1px solid var(--input-border); 
+            border-radius: 6px; 
+            font-family: inherit; 
+            background-color: var(--input-bg);
+            color: var(--text-main);
+            box-sizing: border-box; 
+        }
+
+        button { 
+            padding: 0.75rem 1.5rem; 
+            border: none; 
+            border-radius: 6px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            color: white;
+            transition: background-color 0.2s, transform 0.1s; 
+        }
+        button:active { transform: scale(0.98); }
+        .btn-primary { background-color: var(--primary); }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-secondary { background-color: var(--secondary); }
+        .btn-secondary:hover { background-color: var(--secondary-hover); }
+        .btn-deny { background-color: var(--danger); padding: 0.5rem 1rem; font-size: 0.85rem; }
+        .btn-deny:hover { background-color: var(--danger-hover); }
+        
+        #dashboard { display: none; }
+        
+        .tabs { 
+            display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 2px solid var(--border-color); 
+        }
+        .tab-btn { 
+            background: none; border: none; padding: 0.75rem 1.5rem; color: var(--text-muted); 
+            font-weight: 600; font-size: 1rem; cursor: pointer; border-bottom: 3px solid transparent; 
+            border-radius: 0; 
+        }
+        .tab-btn:hover { color: var(--text-main); }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .table-responsive { width: 100%; overflow-x: auto; margin-top: 1rem; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th, td { text-align: left; padding: 1rem; border-bottom: 1px solid var(--border-color); }
+        th { background-color: var(--table-header-bg); font-weight: 600; color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; }
+        tr:hover td { background-color: var(--panel-bg); }
+
+        .action-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; gap: 1rem; }
+        .add-app-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+
+        #statusText { margin-top: 1rem; font-weight: bold; }
+        .text-error { color: var(--danger); }
+        .text-success { color: var(--success); }
+        
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spinner { display: inline-block; width: 1.5rem; height: 1.5rem; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+        .loading-row td { padding: 3rem !important; text-align: center; color: var(--text-muted); font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 2rem;">
+        <h1 style="border: none; padding: 0; margin: 0;">🍎 Glassbox Teacher Portal</h1>
+        <button id="logoutBtn" class="btn-secondary" style="display: none;" onclick="handleLogout()">Sign Out</button>
+    </div>
+    
+    <!-- Login Panel -->
+    <div class="admin-controls" id="loginPanel" style="display: flex; gap: 1.5rem; align-items: flex-end;">
+        <div class="input-group">
+            <label>Username</label>
+            <input type="text" id="loginUsername" placeholder="Enter username" required>
+        </div>
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" id="loginPassword" placeholder="Enter password" required>
+        </div>
+        <button class="btn-primary" id="loginBtn">Secure Login</button>
+    </div>
+    
+    <div id="statusText"></div>
+
+    <div id="dashboard">
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('classes', this)">🏫 My Classrooms</button>
+            <button class="tab-btn" onclick="switchTab('filters', this)">🛡️ Classroom Filters</button>
+        </div>
+
+        <!-- TAB 1: CLASSROOMS -->
+        <div id="tab-classes" class="tab-content active">
+            <div class="admin-controls">
+                <div class="action-header" style="margin-top: 0;">
+                    <div>
+                        <h3>Your Assigned Classrooms</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Classes assigned to you by the IT Department.</p>
+                    </div>
+                    <button class="btn-secondary" onclick="loadClassrooms()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
+                </div>
+                
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Classroom Name</th>
+                                <th>Enrolled Students</th>
+                            </tr>
+                        </thead>
+                        <tbody id="classroomsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: FILTERS -->
+        <div id="tab-filters" class="tab-content">
+            <div class="admin-controls">
+                <h3>🚦 Manage Classroom Access</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Temporarily override school filters (Allow or Block) exclusively for students in a specific classroom.</p>
+                
+                <div class="add-app-row">
+                    <select id="ruleClassroom" style="flex: 2; min-width: 150px;">
+                        <option value="">-- Select Classroom --</option>
+                    </select>
+                    <input type="text" id="ruleTarget" placeholder="e.g., coolmathgames.com" style="flex: 2; min-width: 150px;">
+                    <select id="ruleAction" style="flex: 1; min-width: 100px;">
+                        <option value="allow">Allow</option>
+                        <option value="block">Block</option>
+                    </select>
+                    <select id="ruleDuration" style="flex: 1; min-width: 100px;">
+                        <option value="1">1 Hour</option>
+                        <option value="4">4 Hours</option>
+                        <option value="24">24 Hours</option>
+                    </select>
+                    <button class="btn-primary" onclick="createRule()">Apply Rule</button>
+                </div>
+
+                <div class="table-responsive" style="margin-top: 2rem;">
+                    <h4 style="margin-top: 0;">Your Active Rules</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Classroom</th>
+                                <th>Target</th>
+                                <th>Action</th>
+                                <th>Expires</th>
+                                <th style="width: 100px;">Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rulesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    let currentWorkerUrl = "";
+    let currentSecret = ""; 
+
+    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const configRes = await fetch('config.json');
+            if (configRes.ok) {
+                const config = await configRes.json();
+                if (config.workerUrl) currentWorkerUrl = config.workerUrl.endsWith('/') ? config.workerUrl.slice(0, -1) : config.workerUrl;
+            }
+        } catch (err) {}
+    });
+
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        btnElement.classList.add('active');
+    }
+
+    async function handleLogin() {
+        if (!currentWorkerUrl) {
+            currentWorkerUrl = prompt("Worker URL missing. Enter manually:");
+            if (!currentWorkerUrl) return;
+        }
+
+        const usernameInput = document.getElementById('loginUsername').value.trim();
+        const passwordInput = document.getElementById('loginPassword').value.trim();
+        const statusText = document.getElementById('statusText');
+
+        if (!usernameInput || !passwordInput) return;
+
+        statusText.innerHTML = '<span class="spinner" style="vertical-align: middle;"></span> Authenticating...';
+        
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: usernameInput, password: passwordInput })
+            });
+
+            if (!response.ok) throw new Error(await response.text());
+            const data = await response.json();
+            
+            if (data.role !== 'teacher' && data.role !== 'school_admin' && data.role !== 'master_admin') {
+                throw new Error("Access Denied.");
+            }
+
+            currentSecret = data.token;
+            
+            document.getElementById('loginPanel').style.display = "none";
+            document.getElementById('logoutBtn').style.display = "block";
+            document.getElementById('dashboard').style.display = "block";
+            
+            statusText.innerHTML = '<span class="text-success">✅ Connected securely!</span>';
+            setTimeout(() => statusText.innerHTML = '', 3000);
+
+            // Load Initial Data
+            await loadClassrooms();
+            loadRules();
+
+        } catch (error) {
+            statusText.innerHTML = `<span class="text-error">❌ Authentication Failed.</span>`;
+        }
+    }
+
+    async function handleLogout() {
+        try {
+            await fetch(`${currentWorkerUrl}/api/auth/logout`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+        } catch (e) {} 
+        location.reload();
+    }
+
+    async function loadClassrooms() {
+        const tbody = document.getElementById('classroomsTableBody');
+        const select = document.getElementById('ruleClassroom');
+        tbody.innerHTML = `<tr><td colspan="2" class="loading-row"><div class="spinner"></div></td></tr>`;
+        
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/teacher/classrooms`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!res.ok) throw new Error("Failed to load");
+            
+            const data = await res.json();
+            tbody.innerHTML = "";
+            select.innerHTML = '<option value="">-- Select Classroom --</option>';
+
+            if (data.classrooms.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted);">No classrooms assigned to you.</td></tr>`;
+                return;
+            }
+
+            data.classrooms.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${c.name}</strong></td><td>${c.student_count} Students</td>`;
+                tbody.appendChild(tr);
+
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                select.appendChild(opt);
+            });
+        } catch (e) { tbody.innerHTML = `<tr><td colspan="2" class="text-error" style="text-align: center;">Failed to load.</td></tr>`; }
+    }
+
+    async function loadRules() {
+        const tbody = document.getElementById('rulesTableBody');
+        tbody.innerHTML = `<tr><td colspan="5" class="loading-row"><div class="spinner"></div></td></tr>`;
+        
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/teacher/rules`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!res.ok) throw new Error("Failed to load");
+            
+            const data = await res.json();
+            tbody.innerHTML = "";
+
+            if (data.rules.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No active rules.</td></tr>`;
+                return;
+            }
+
+            data.rules.forEach(rule => {
+                const badge = `<span style="background: ${rule.action === 'block' ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${rule.action}</span>`;
+                
+                let expiresText = 'Permanent';
+                if (rule.expires_at) {
+                    const d = new Date(rule.expires_at.replace(' ', 'T') + 'Z');
+                    expiresText = d.toLocaleString([], { hour: '2-digit', minute: '2-digit' });
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${rule.classroom_name}</td>
+                    <td style="font-family: monospace;">${rule.target}</td>
+                    <td>${badge}</td>
+                    <td>${expiresText}</td>
+                    <td><button class="btn-deny" onclick="removeRule(${rule.id})" style="padding: 0.3rem 0.6rem;">Remove</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) { tbody.innerHTML = `<tr><td colspan="5" class="text-error" style="text-align: center;">Failed to load.</td></tr>`; }
+    }
+
+    async function createRule() {
+        const classroomId = document.getElementById('ruleClassroom').value;
+        const target = document.getElementById('ruleTarget').value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const action = document.getElementById('ruleAction').value;
+        const duration = document.getElementById('ruleDuration').value;
+
+        if (!classroomId || !target) return alert("Classroom and Target are required.");
+
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/teacher/rules`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ classroomId: parseInt(classroomId), target, matchType: 'domain', action, expiresInHours: parseFloat(duration) })
+            });
+
+            if (res.ok) {
+                document.getElementById('ruleTarget').value = "";
+                loadRules();
+            } else alert((await res.json()).error || "Failed to create rule.");
+        } catch (e) { alert("Network Error."); }
+    }
+
+    async function removeRule(id) {
+        if (!confirm("Remove this rule?")) return;
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/teacher/rules/remove`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ruleId: id })
+            });
+            if (res.ok) loadRules();
+        } catch (e) {}
+    }
+</script>
+
+</body>
+</html>
