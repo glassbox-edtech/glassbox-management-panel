@@ -664,92 +664,93 @@
                     </table>
                 </div>
             </div>
+        </div>
 
-            <!-- TAB 3: ORGANIZATION (NEW) -->
-            <div id="tab-org" class="tab-content">
+        <!-- TAB 3: ORGANIZATION (NEW) -->
+        <div id="tab-org" class="tab-content">
+            
+            <div class="admin-controls">
+                <div class="action-header" style="margin-top: 0;">
+                    <div>
+                        <h3>🏫 Manage Campuses (Schools)</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Create distinct environments for your district.</p>
+                    </div>
+                    <button class="btn-secondary" onclick="loadOrgData()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
+                </div>
                 
-                <div class="admin-controls">
-                    <div class="action-header" style="margin-top: 0;">
-                        <div>
-                            <h3>🏫 Manage Campuses (Schools)</h3>
-                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Create distinct environments for your district.</p>
-                        </div>
-                        <button class="btn-secondary" onclick="loadOrgData()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
-                    </div>
-                    
-                    <div class="add-app-row">
-                        <input type="text" id="newSchoolName" placeholder="School Name (e.g., East High)" style="flex: 1;">
-                        <button class="btn-approve" onclick="createSchool()">Add School</button>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>School Name</th>
-                                    <th>Created At</th>
-                                    <th style="width: 100px;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="schoolsTableBody"></tbody>
-                        </table>
-                    </div>
+                <div class="add-app-row">
+                    <input type="text" id="newSchoolName" placeholder="School Name (e.g., East High)" style="flex: 1;">
+                    <button class="btn-approve" onclick="createSchool()">Add School</button>
                 </div>
 
-                <div class="admin-controls">
-                    <h3>👥 Staff Accounts</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Provision access for IT Admins and Teachers.</p>
-                    
-                    <div class="add-app-row" style="flex-wrap: wrap;">
-                        <input type="text" id="newStaffUser" placeholder="Username" style="flex: 1; min-width: 150px;">
-                        <input type="password" id="newStaffPass" placeholder="Password" style="flex: 1; min-width: 150px;">
-                        <select id="newStaffRole" style="flex: 1; min-width: 150px;">
-                            <option value="teacher">Teacher</option>
-                            <option value="school_admin">School Admin</option>
-                            <option value="master_admin">Master Admin</option>
-                        </select>
-                        <select id="newStaffSchool" style="flex: 1; min-width: 150px;">
-                            <!-- Populated dynamically -->
-                        </select>
-                        <button class="btn-primary" onclick="createStaff()">Create Account</button>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Username</th>
-                                    <th>Role</th>
-                                    <th>Assigned School</th>
-                                    <th>Last Active</th>
-                                    <th style="width: 250px;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="staffTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="admin-controls">
-                    <h3>🎒 Student Roster & Transfers</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">View registered devices and override their locked campus if they transfer.</p>
-                    
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Student Identity Hash</th>
-                                    <th>Current School</th>
-                                    <th>Registration Date</th>
-                                    <th style="width: 250px;">Transfer To...</th>
-                                </tr>
-                            </thead>
-                            <tbody id="studentsTableBody"></tbody>
-                        </table>
-                    </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>School Name</th>
+                                <th>Created At</th>
+                                <th style="width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schoolsTableBody"></tbody>
+                    </table>
                 </div>
             </div>
+
+            <div class="admin-controls">
+                <h3>👥 Staff Accounts</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Provision access for IT Admins and Teachers.</p>
+                
+                <div class="add-app-row" style="flex-wrap: wrap;">
+                    <input type="text" id="newStaffUser" placeholder="Username" style="flex: 1; min-width: 150px;">
+                    <input type="password" id="newStaffPass" placeholder="Password" style="flex: 1; min-width: 150px;">
+                    <select id="newStaffRole" style="flex: 1; min-width: 150px;">
+                        <option value="teacher">Teacher</option>
+                        <option value="school_admin">School Admin</option>
+                        <option value="master_admin">Master Admin</option>
+                    </select>
+                    <select id="newStaffSchool" style="flex: 1; min-width: 150px;">
+                        <!-- Populated dynamically -->
+                    </select>
+                    <button class="btn-primary" onclick="createStaff()">Create Account</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Assigned School</th>
+                                <th>Last Active</th>
+                                <th style="width: 250px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staffTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="admin-controls">
+                <h3>🎒 Student Roster & Transfers</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">View registered devices and override their locked campus if they transfer.</p>
+                
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student Identity Hash</th>
+                                <th>Current School</th>
+                                <th>Registration Date</th>
+                                <th style="width: 250px;">Transfer To...</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
         <!-- TAB 4: SYSTEM SETTINGS -->
         <div id="tab-settings" class="tab-content">
