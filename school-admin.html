@@ -183,7 +183,12 @@
 <div class="container">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 2rem;">
         <h1 style="border: none; padding: 0; margin: 0;">🏫 Glassbox School IT Portal</h1>
-        <button id="logoutBtn" class="btn-secondary" style="display: none;" onclick="handleLogout()">Sign Out</button>
+        
+        <!-- 🎯 FIX: Header buttons for Push Notifications and Sign Out -->
+        <div style="display: flex; gap: 1rem;">
+            <button id="pushBtn" class="btn-primary" style="display: none;" onclick="initPushNotifications()">🔔 Enable Alerts</button>
+            <button id="logoutBtn" class="btn-secondary" style="display: none;" onclick="handleLogout()">Sign Out</button>
+        </div>
     </div>
     
     <div class="config-panel" id="loginPanel">
@@ -206,7 +211,7 @@
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('filter', this)">🛡️ Web Filter</button>
             <button class="tab-btn" onclick="switchTab('insights', this)">📊 Insights & Analytics</button>
-            <button class="tab-btn" onclick="switchTab('org', this)">🏢 School Staff</button>
+            <button class="tab-btn" onclick="switchTab('org', this)">🏢 Staff & Classrooms</button>
         </div>
 
         <!-- TAB 1: WEB FILTER -->
@@ -436,7 +441,7 @@
             </div>
         </div>
 
-        <!-- TAB 3: ORGANIZATION (STRIPPED DOWN FOR SCHOOL ADMINS) -->
+        <!-- TAB 3: ORGANIZATION (STAFF & CLASSROOMS) -->
         <div id="tab-org" class="tab-content">
             <div class="admin-controls">
                 <h3>👥 Manage Teachers & Staff</h3>
@@ -464,6 +469,54 @@
                         </thead>
                         <tbody id="staffTableBody"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- 🎯 NEW: CLASSROOM MANAGEMENT -->
+            <div class="admin-controls">
+                <div class="action-header" style="margin-top: 0;">
+                    <div>
+                        <h3>🏫 Manage Classrooms</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Create classroom rosters and assign them to teachers.</p>
+                    </div>
+                    <button class="btn-secondary" onclick="loadClassrooms()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
+                </div>
+
+                <div class="add-app-row" style="flex-wrap: wrap;">
+                    <input type="text" id="newClassName" placeholder="Class Name (e.g., Period 1 Math)" style="flex: 2; min-width: 150px;">
+                    <select id="newClassTeacher" style="flex: 1; min-width: 150px;">
+                        <option value="">-- Select Teacher --</option>
+                        <!-- Populated dynamically via loadStaff() -->
+                    </select>
+                    <button class="btn-approve" onclick="createClassroom()">Create Class</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Classroom Name</th>
+                                <th>Assigned Teacher</th>
+                                <th style="width: 150px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="classroomsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 🎯 NEW: STUDENT ENROLLMENT (CLIENT-SIDE HASHING) -->
+            <div class="admin-controls">
+                <h3>🎒 Enroll Student to Classroom</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Enroll a student into a class via their email. The email is securely hashed on your device and never sent to the server in plaintext.</p>
+
+                <div class="add-app-row" style="flex-wrap: wrap;">
+                    <input type="email" id="enrollStudentEmail" placeholder="Student Email (e.g., student@school.edu)" style="flex: 2; min-width: 200px;">
+                    <select id="enrollClassroom" style="flex: 1; min-width: 150px;">
+                        <option value="">-- Select Classroom --</option>
+                        <!-- Populated dynamically via loadClassrooms() -->
+                    </select>
+                    <button class="btn-primary" onclick="enrollStudent()">Securely Enroll</button>
                 </div>
             </div>
         </div>
@@ -523,6 +576,17 @@
     }
 
     // ---------------------------------------------------------
+    // 🔐 CLIENT-SIDE CRYPTOGRAPHY HELPER
+    // ---------------------------------------------------------
+    async function hashEmail(email) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(email.trim().toLowerCase());
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // ---------------------------------------------------------
     // AUTHENTICATION
     // ---------------------------------------------------------
     async function handleLogin() {
@@ -552,7 +616,6 @@
             if (!response.ok) throw new Error(await response.text());
             const data = await response.json();
             
-            // STRICT SCOPE CHECK: Ensure only authorized admins can log in here.
             if (data.role !== 'school_admin' && data.role !== 'master_admin') {
                 throw new Error("Access Denied: You must be a School Admin or Master Admin to access this portal.");
             }
@@ -564,13 +627,15 @@
             document.getElementById('logoutBtn').style.display = "block";
             document.getElementById('dashboard').style.display = "block";
             
-            // Initialize Dashboard
             await loadRequests();
             loadActiveFilters(); 
             refreshInsightsTab(); 
             loadApprovedApps();
             loadStaff();
-            initPushNotifications(); 
+            loadClassrooms();
+            
+            // 🎯 FIX: Check if we need to show the manual Push notification permission button
+            checkPushStatus(); 
             
             statusText.innerHTML = '<span class="text-success">✅ Connected securely!</span>';
             setTimeout(() => statusText.innerHTML = '', 3000);
@@ -592,7 +657,7 @@
     }
 
     // ---------------------------------------------------------
-    // STAFF MANAGEMENT (Scoped to School Admin)
+    // STAFF & CLASSROOM MANAGEMENT
     // ---------------------------------------------------------
     async function loadStaff() {
         try {
@@ -601,8 +666,12 @@
             });
             if (!res.ok) return;
             const data = await res.json();
+            
             const tbody = document.getElementById('staffTableBody');
+            const teacherSelect = document.getElementById('newClassTeacher');
+            
             tbody.innerHTML = "";
+            teacherSelect.innerHTML = '<option value="">-- Select Teacher --</option>';
 
             data.users.forEach(u => {
                 const lastActive = u.last_active_at ? new Date(u.last_active_at).toLocaleString() : 'Never';
@@ -617,6 +686,14 @@
                     </td>
                 `;
                 tbody.appendChild(tr);
+
+                // 🎯 FIX: Populate the Classroom Creation dropdown with valid teachers
+                if (u.role === 'teacher') {
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = u.username;
+                    teacherSelect.appendChild(opt);
+                }
             });
         } catch (e) { console.error("Error loading staff:", e); }
     }
@@ -632,7 +709,7 @@
             const res = await fetch(`${currentWorkerUrl}/api/admin/users`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'create', username, password, role }) // Notice: schoolId is omitted. Backend handles scoping!
+                body: JSON.stringify({ action: 'create', username, password, role })
             });
             if (res.ok) {
                 document.getElementById('newStaffUser').value = "";
@@ -668,6 +745,109 @@
             if (res.ok) loadStaff();
             else alert((await res.json()).error || "Failed to delete.");
         } catch (e) { alert("Error deleting staff."); }
+    }
+
+    // --- Classrooms ---
+    async function loadClassrooms() {
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/classrooms`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            
+            const tbody = document.getElementById('classroomsTableBody');
+            const enrollSelect = document.getElementById('enrollClassroom');
+            
+            tbody.innerHTML = "";
+            enrollSelect.innerHTML = '<option value="">-- Select Classroom --</option>';
+
+            if (!data.classrooms || data.classrooms.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 1rem;">No classrooms created yet.</td></tr>`;
+                return;
+            }
+
+            data.classrooms.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${c.name}</strong></td>
+                    <td>${c.teacher_username || 'Unknown Teacher'}</td>
+                    <td>
+                        <button class="btn-deny" onclick="deleteClassroom(${c.id})" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                enrollSelect.appendChild(opt);
+            });
+        } catch (e) { console.error("Error loading classrooms:", e); }
+    }
+
+    async function createClassroom() {
+        const name = document.getElementById('newClassName').value.trim();
+        const teacherId = document.getElementById('newClassTeacher').value;
+
+        if (!name || !teacherId) return alert("Class name and teacher are required.");
+
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/classrooms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'create', name, teacherId: parseInt(teacherId) })
+            });
+            
+            if (res.ok) {
+                document.getElementById('newClassName').value = "";
+                document.getElementById('newClassTeacher').value = "";
+                loadClassrooms();
+            } else {
+                const err = await res.json();
+                alert(err.error || "Failed to create classroom.");
+            }
+        } catch (e) { alert("Error creating classroom."); }
+    }
+
+    async function deleteClassroom(id) {
+        if (!confirm("Are you sure you want to delete this classroom? Students will be unassigned.")) return;
+        
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/classrooms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete', id })
+            });
+            if (res.ok) loadClassrooms();
+            else alert((await res.json()).error || "Failed to delete classroom.");
+        } catch (e) { alert("Error deleting classroom."); }
+    }
+
+    async function enrollStudent() {
+        const email = document.getElementById('enrollStudentEmail').value.trim();
+        const classroomId = document.getElementById('enrollClassroom').value;
+
+        if (!email || !classroomId) return alert("Email and Classroom are required.");
+
+        try {
+            // Securely hash the email BEFORE sending to the server
+            const studentHash = await hashEmail(email);
+
+            const res = await fetch(`${currentWorkerUrl}/api/admin/classrooms/enroll`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ studentHash: studentHash, classroomId: parseInt(classroomId) })
+            });
+
+            if (res.ok) {
+                alert(`Successfully enrolled student into classroom!`);
+                document.getElementById('enrollStudentEmail').value = "";
+            } else {
+                const err = await res.json();
+                alert(err.error || "Failed to enroll student. Ensure they have installed the extension first.");
+            }
+        } catch (e) { alert("Error enrolling student."); }
     }
 
     // ---------------------------------------------------------
@@ -1100,6 +1280,19 @@
     // ---------------------------------------------------------
     // PUSH NOTIFICATIONS (Service Worker)
     // ---------------------------------------------------------
+    
+    // 🎯 NEW: UI Hook to check if we need to show the permission button
+    async function checkPushStatus() {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'default') {
+            document.getElementById('pushBtn').style.display = 'block';
+        } else if (Notification.permission === 'granted') {
+            document.getElementById('pushBtn').style.display = 'none';
+            // We can silently try to initialize if they already granted it on a previous session
+            initPushNotifications(true);
+        }
+    }
+
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -1109,16 +1302,20 @@
         return outputArray;
     }
 
-    async function initPushNotifications() {
+    async function initPushNotifications(silent = false) {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
         try {
+            // 🎯 NEW: Physical button click required to prompt this now
+            if (!silent) {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') return;
+                document.getElementById('pushBtn').style.display = 'none';
+            }
+
             const registration = await navigator.serviceWorker.register(new URL('sw.js', window.location.href).href);
             let sw = registration.active || registration.waiting || registration.installing;
             if (sw) sw.postMessage({ type: 'SET_CREDENTIALS', workerUrl: currentWorkerUrl, adminSecret: currentSecret });
             
-            const permission = await Notification.requestPermission();
-            if (permission !== 'granted') return;
-
             const vapidRes = await fetch(`${currentWorkerUrl}/api/admin/vapid-public`, { headers: { 'Authorization': `Bearer ${currentSecret}` }});
             if (!vapidRes.ok) return;
             const { publicKey } = await vapidRes.json();
@@ -1129,6 +1326,7 @@
                 method: 'POST', headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(subscription)
             });
+            console.log("Push registered successfully!");
         } catch (err) { console.error("Push registration failed:", err); }
     }
 
